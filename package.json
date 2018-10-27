@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "build": "rm -R ./build && serverless package --package build"
+  },
+  "dependencies": {
+    "archiver": "^3.0.0"
+  }
+}
