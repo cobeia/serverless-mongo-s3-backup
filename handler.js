@@ -12,9 +12,7 @@ const username = process.env.USERNAME;
 const password = process.env.PASSWORD;
 const dbName = process.env.DB;
 
-// const zipFolder = require("zip-fol∂er");
-const archiver = require("archiver");
-const archive = archiver("zip");
+const tar = require("tar");
 const s3bucket = new AWS.S3({
   params: {
     Bucket: s3Path
@@ -26,7 +24,10 @@ module.exports.dump = function(event, context, cb) {
     process.env["PATH"] + ":" + process.env["LAMBDA_TASK_ROOT"];
   console.log(process.env["PATH"]);
   let fileName =
-    new Date().toDateString().replace(/ /g, "") + "_" + new Date().getTime();
+    "dump_cobeia_prod_" +
+    new Date().toDateString().replace(/ /g, "") +
+    "_" +
+    new Date().getTime();
   let folderName = "/tmp/" + fileName + "/";
   exec(
     "mongodump --host " +
@@ -45,70 +46,41 @@ module.exports.dump = function(event, context, cb) {
         console.error(`exec error: ${error}`);
         return;
       }
-      let filePath = "/tmp/" + fileName + ".zip";
+      let filePath = "/tmp/" + fileName + ".tgz";
 
-      archive.on("error", function(err) {
-        throw err;
-      });
+      tar
+        .c(
+          {
+            gzip: true,
+            file: filePath
+          },
+          [folderName]
+        )
+        .then(_ => {
+          fs.readFile(filePath, function(err, data) {
+            s3bucket.createBucket(function() {
+              let params = {
+                Key: fileName + ".tgz",
+                Body: data
+              };
+              s3bucket.upload(params, function(err, data) {
+                // Whether there is an error or not, delete the temp file
+                fs.unlink(filePath, function(err) {
+                  if (err) {
+                    console.error(err);
+                  }
+                  console.log("Temp File Delete");
+                });
 
-      archive.pipe(filePath);
-      archive.directory(folderName, false);
-      archive.finalize();
-
-      fs.readFile(filePath, function(err, data) {
-        s3bucket.createBucket(function() {
-          let params = {
-            Key: fileName,
-            Body: data
-          };
-          s3bucket.upload(params, function(err, data) {
-            // Whether there is an error or not, delete the temp file
-            fs.unlink(filePath, function(err) {
-              if (err) {
-                console.error(err);
-              }
-              console.log("Temp File Delete");
+                if (err) {
+                  console.log("ERROR MSG: ", err);
+                } else {
+                  console.log("Successfully uploaded data");
+                }
+              });
             });
-
-            if (err) {
-              console.log("ERROR MSG: ", err);
-            } else {
-              console.log("Successfully uploaded data");
-            }
           });
         });
-      });
-
-      //   zipFolder(folderName, filePath, function(err) {
-      //     if (err) {
-      //       console.log("oh no!", err);
-      //     } else {
-      //       console.log("EXCELLENT");
-      //       fs.readFile(filePath, function(err, data) {
-      //         s3bucket.createBucket(function() {
-      //           let params = {
-      //             Key: fileName,
-      //             Body: data
-      //           };
-      //           s3bucket.upload(params, function(err, data) {
-      //             // Whether there is an error or not, delete the temp file
-      //             fs.unlink(filePath, function(err) {
-      //               if (err) {
-      //                 console.error(err);
-      //               }
-      //               console.log("Temp File Delete");
-      //             });
-
-      //             if (err) {
-      //               console.log("ERROR MSG: ", err);
-      //             } else {
-      //               console.log("Successfully uploaded data");
-      //             }
-      //           });
-      //         });
-      //       });
-      //     }
-      //   });
     }
   );
 };

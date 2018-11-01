@@ -3,7 +3,7 @@
     "build": "rm -Rf ./build && yarn run serverless package --package build"
   },
   "dependencies": {
-    "archiver": "^3.0.0"
+    "tar": "^4.4.6"
   },
   "devDependencies": {
     "serverless": "^1.32.0"
